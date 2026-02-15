@@ -24,6 +24,7 @@ export default function App() {
       <AppLayout>
         <Routes>
           <Route path="/" element={<Inicio />} />
+          <Route path="/inicio" element={<Inicio />} />
           <Route path="/simulacao" element={<Simulacao />} />
           <Route path="/cpf" element={<Cpf />} />
           <Route path="/pessoa" element={<Pessoa />} />
