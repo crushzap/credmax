@@ -30,6 +30,9 @@ const mimeTypes = {
   ".map": "application/json; charset=utf-8",
 };
 
+const distDir = path.join(rootDir, "dist");
+const distIndex = path.join(distDir, "index.html");
+
 const entryPoints = {
   inicio: "inicio.html",
   cpfHtml: "cpf.html",
@@ -96,14 +99,19 @@ function send(res, status, body, contentType) {
 }
 
 function resolveFilePath(requestPath) {
-  for (const mapping of baseMappings) {
-    if (requestPath.startsWith(mapping.prefix)) {
-      const relative = requestPath.slice(mapping.prefix.length);
-      const filePart = relative.length === 0 ? "index.html" : relative;
-      return path.join(rootDir, mapping.folder, filePart);
-    }
+  const normalized = requestPath.replace(/^\/+/, "");
+  if (!normalized) {
+    return fs.existsSync(distIndex) ? distIndex : null;
   }
-  return null;
+  const directPath = path.join(distDir, normalized);
+  if (fs.existsSync(directPath) && fs.statSync(directPath).isFile()) {
+    return directPath;
+  }
+  const indexPath = path.join(distDir, normalized, "index.html");
+  if (fs.existsSync(indexPath) && fs.statSync(indexPath).isFile()) {
+    return indexPath;
+  }
+  return fs.existsSync(distIndex) ? distIndex : null;
 }
 
 function loadEnvFile(filePath) {
