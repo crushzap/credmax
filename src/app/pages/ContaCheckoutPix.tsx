@@ -29,6 +29,7 @@ export default function ContaCheckoutPix() {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [tempo, setTempo] = useState('')
+  const [copiado, setCopiado] = useState(false)
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined
   const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   const apiUrlBase = isLocal ? '/api' : apiBaseUrl
@@ -110,6 +111,8 @@ export default function ContaCheckoutPix() {
   async function handleCopiar() {
     if (!dados?.copiaECola) return
     await navigator.clipboard.writeText(dados.copiaECola)
+    setCopiado(true)
+    window.setTimeout(() => setCopiado(false), 2000)
   }
 
   return (
@@ -144,8 +147,8 @@ export default function ContaCheckoutPix() {
               <div className="pix-copia">
                 <label>Copie o código PIX abaixo:</label>
                 <input value={dados.copiaECola} readOnly />
-                <button type="button" onClick={handleCopiar}>
-                  Copiar Código
+                <button type="button" onClick={handleCopiar} className={copiado ? 'pix-copia__botao pix-copia__botao--copiado' : 'pix-copia__botao'}>
+                  {copiado ? 'Copiado!' : 'Copiar Código'}
                 </button>
               </div>
               <div className="pix-status">

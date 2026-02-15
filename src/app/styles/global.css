@@ -3100,7 +3100,7 @@ body {
   color: #0f172a;
 }
 
-.pix-copia button {
+.pix-copia__botao {
   width: 100%;
   border: none;
   border-radius: 8px;
@@ -3109,6 +3109,19 @@ body {
   color: #ffffff;
   font-weight: 700;
   cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.pix-copia__botao:hover {
+  background: #1d4ed8;
+}
+
+.pix-copia__botao:active {
+  transform: scale(0.98);
+}
+
+.pix-copia__botao--copiado {
+  background: #16a34a;
 }
 
 .pix-status {
