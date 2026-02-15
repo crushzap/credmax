@@ -5,12 +5,19 @@ type PixData = {
   id: string
   total: number
   copiaECola: string
-  qrCodeBase64: string
+  qrCodeBase64?: string
   expiracao?: string
 }
 
 function formatarMoeda(valor: number) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)
+  const valorReais = valor / 100
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    useGrouping: false,
+  }).format(valorReais)
 }
 
 function calcularTempoRestante(expiracao?: string) {
@@ -68,15 +75,14 @@ export default function ContaCheckoutPix() {
     }
     const buscar = async () => {
       try {
-        const response = await fetch(`${apiUrlBase}/pix/mercadopago/${id}`)
+        const response = await fetch(`${apiUrlBase}/pix/drakepay/${id}`)
         const resposta = await response.json()
         const payload = resposta?.data ?? resposta
-        const qrCodeBase64 =
-          payload?.qrCodeBase64 ?? payload?.qr_code_base64 ?? payload?.point_of_interaction?.transaction_data?.qr_code_base64
-        const copiaECola = payload?.qrCode ?? payload?.qr_code ?? payload?.point_of_interaction?.transaction_data?.qr_code
-        const total = payload?.total ?? payload?.valor ?? cache?.total ?? 0
+        const qrCodeBase64 = payload?.qrCodeBase64 ?? payload?.qr_code_base64
+        const copiaECola = payload?.qrcode ?? payload?.qrCode ?? payload?.qr_code ?? payload?.copiaECola
+        const total = payload?.amount ?? payload?.valor ?? payload?.total ?? cache?.total ?? 0
         const expiracao = expiracaoPadrao
-        if (!qrCodeBase64 || !copiaECola) {
+        if (!copiaECola) {
           if (!cache) setErro('PIX não encontrado.')
           return
         }
@@ -115,12 +121,16 @@ export default function ContaCheckoutPix() {
     window.setTimeout(() => setCopiado(false), 2000)
   }
 
+  const qrCodeUrl = dados?.copiaECola
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(dados.copiaECola)}`
+    : ''
+
   return (
     <div className="pix-page">
       <div className="pix-topo">
         <div className="pix-topo__marca">
           <span className="pix-topo__icone">$</span>
-          <span>Bancred</span>
+          <span>CredMax</span>
         </div>
       </div>
       <div className="pix-container">
@@ -141,9 +151,15 @@ export default function ContaCheckoutPix() {
           {!carregando && erro ? <div className="pix-erro">{erro}</div> : null}
           {!carregando && dados ? (
             <>
-              <div className="pix-qr">
-                <img src={`data:image/png;base64,${dados.qrCodeBase64}`} alt="QR Code PIX" />
-              </div>
+              {dados.qrCodeBase64 ? (
+                <div className="pix-qr">
+                  <img src={`data:image/png;base64,${dados.qrCodeBase64}`} alt="QR Code PIX" />
+                </div>
+              ) : qrCodeUrl ? (
+                <div className="pix-qr">
+                  <img src={qrCodeUrl} alt="QR Code PIX" />
+                </div>
+              ) : null}
               <div className="pix-copia">
                 <label>Copie o código PIX abaixo:</label>
                 <input value={dados.copiaECola} readOnly />

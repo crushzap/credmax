@@ -5,10 +5,13 @@ const path = require("path");
 const { URL } = require("url");
 
 const rootDir = __dirname;
-const envFromFile = loadEnvFile(path.join(rootDir, ".env"));
-for (const [key, value] of Object.entries(envFromFile)) {
-  if (process.env[key] === undefined) {
-    process.env[key] = value;
+const envFiles = resolveEnvFiles(rootDir);
+for (const envFile of envFiles) {
+  const envFromFile = loadEnvFile(envFile);
+  for (const [key, value] of Object.entries(envFromFile)) {
+    if (process.env[key] === undefined) {
+      process.env[key] = value;
+    }
   }
 }
 const port = 3005;
@@ -32,6 +35,7 @@ const mimeTypes = {
 
 const distDir = path.join(rootDir, "dist");
 const distIndex = path.join(distDir, "index.html");
+const drakepayCache = new Map();
 
 const entryPoints = {
   inicio: "inicio.html",
@@ -39,7 +43,7 @@ const entryPoints = {
   pessoaHtml: "pessoa.html",
   analise: "analise",
   aprovado: "aprovado",
-  bancred: "bancred",
+  credmax: "credmax",
   configurandoConta: "configurando-conta",
   conta: "conta",
   cpf: "cpf",
@@ -54,7 +58,7 @@ const aliasPaths = {
   "/inicio": "/inicio/",
   "/analise": "/analise/",
   "/aprovado": "/aprovado/",
-  "/bancred": "/bancred/",
+  "/credmax": "/credmax/",
   "/configurando-conta": "/configurando-conta/",
   "/conta": "/conta/",
   "/cpf": "/cpf/",
@@ -79,7 +83,7 @@ const baseMappings = [
   { prefix: "/pessoa.html/", folder: entryPoints.pessoaHtml },
   { prefix: "/analise/", folder: entryPoints.analise },
   { prefix: "/aprovado/", folder: entryPoints.aprovado },
-  { prefix: "/bancred/", folder: entryPoints.bancred },
+  { prefix: "/credmax/", folder: entryPoints.credmax },
   { prefix: "/configurando-conta/", folder: entryPoints.configurandoConta },
   { prefix: "/conta/", folder: entryPoints.conta },
   { prefix: "/cpf/", folder: entryPoints.cpf },
@@ -141,6 +145,12 @@ function loadEnvFile(filePath) {
   }
 }
 
+function resolveEnvFiles(baseDir) {
+  const mode = process.env.NODE_ENV || "production";
+  const candidates = [".env", ".env.local", `.env.${mode}`, `.env.${mode}.local`];
+  return candidates.map((file) => path.join(baseDir, file)).filter((file) => fs.existsSync(file));
+}
+
 function getRapidApiKey() {
   return process.env["x-rapidapi-key"] || process.env.X_RAPIDAPI_KEY || process.env.RAPIDAPI_KEY;
 }
@@ -161,6 +171,98 @@ function getWebhookBaseUrl() {
   return process.env.WEBHOOK_BASE_URL || "";
 }
 
+function getDrakepayClientId() {
+  return process.env.DRAKEPAY_CLIENT_ID || "";
+}
+
+function getDrakepayClientSecret() {
+  return process.env.DRAKEPAY_CLIENT_SECRET || "";
+}
+
+function requestJson(options, body) {
+  return new Promise((resolve, reject) => {
+    const apiReq = https.request(options, (apiRes) => {
+      let response = "";
+      apiRes.on("data", (chunk) => {
+        response += chunk;
+      });
+      apiRes.on("end", () => {
+        resolve({ status: apiRes.statusCode || 200, body: response });
+      });
+    });
+    apiReq.on("error", (err) => reject(err));
+    if (body) {
+      apiReq.write(body);
+    }
+    apiReq.end();
+  });
+}
+
+async function obterIpPublico() {
+  const { status: statusV4, body: bodyV4 } = await requestJson({
+    hostname: "api.ipify.org",
+    path: "/?format=json",
+    method: "GET",
+  });
+  const { status: statusV6, body: bodyV6 } = await requestJson({
+    hostname: "api64.ipify.org",
+    path: "/?format=json",
+    method: "GET",
+  });
+  const parseJson = (texto) => {
+    try {
+      return texto ? JSON.parse(texto) : null;
+    } catch {
+      return null;
+    }
+  };
+  const dataV4 = parseJson(bodyV4);
+  const dataV6 = parseJson(bodyV6);
+  return {
+    ipv4: dataV4?.ip || null,
+    ipv6: dataV6?.ip || null,
+    statusV4,
+    statusV6,
+  };
+}
+
+async function gerarTokenDrakepay() {
+  const clientId = getDrakepayClientId();
+  const clientSecret = getDrakepayClientSecret();
+  if (!clientId || !clientSecret) {
+    return { ok: false, message: "Credenciais do Drakepay não configuradas" };
+  }
+  console.log(`[DRAKEPAY] Iniciando login`);
+  const payload = JSON.stringify({ client_id: clientId, client_secret: clientSecret });
+  const { status, body } = await requestJson(
+    {
+      hostname: "api.drakepay.app",
+      path: "/api/auth/login",
+      method: "POST",
+      family: 4,
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(payload),
+      },
+    },
+    payload
+  );
+  console.log(`[DRAKEPAY] Login status: ${status}`);
+  console.log(`[DRAKEPAY] Login resposta: ${body}`);
+  let parsed = null;
+  try {
+    parsed = body ? JSON.parse(body) : null;
+  } catch {
+    parsed = null;
+  }
+  const token = parsed?.token;
+  if (!token) {
+    const detalhe = parsed?.message || parsed?.error || "Token do Drakepay indisponível";
+    return { ok: false, message: detalhe, status, raw: parsed };
+  }
+  return { ok: true, token, status, raw: parsed };
+}
+
 function respondJson(res, status, data, extraHeaders) {
   const responseBody = JSON.stringify(data);
   res.writeHead(status, {
@@ -173,7 +275,7 @@ function respondJson(res, status, data, extraHeaders) {
   res.end(responseBody);
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const pathname = decodeURIComponent(url.pathname);
 
@@ -185,6 +287,16 @@ const server = http.createServer((req, res) => {
       "Cache-Control": "no-store",
     });
     res.end();
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/diagnostico/ip") {
+    try {
+      const ipInfo = await obterIpPublico();
+      respondJson(res, 200, { success: true, data: ipInfo });
+    } catch {
+      respondJson(res, 500, { success: false, message: "Falha ao obter IP público" });
+    }
     return;
   }
 
@@ -374,7 +486,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (req.method === "POST" && pathname === "/api/pix/mercadopago") {
+  if (req.method === "POST" && pathname === "/api/pix/drakepay") {
     let body = "";
     req.on("data", (chunk) => {
       body += chunk;
@@ -383,145 +495,120 @@ const server = http.createServer((req, res) => {
       }
     });
     req.on("end", () => {
-      console.log(`[PIX] Requisição recebida em ${new Date().toISOString()}`);
-      console.log(`[PIX] Body bruto: ${body}`);
-      let payload = {};
-      try {
-        payload = body ? JSON.parse(body) : {};
-      } catch (err) {
-        console.log(`[PIX] Erro ao parsear JSON: ${err.message}`);
-        respondJson(res, 400, { success: false, message: "Payload inválido" });
-        return;
-      }
+      (async () => {
+        console.log(`[DRAKEPAY] Requisição recebida em ${new Date().toISOString()}`);
+        let payload = {};
+        try {
+          payload = body ? JSON.parse(body) : {};
+        } catch {
+          respondJson(res, 400, { success: false, message: "Payload inválido" });
+          return;
+        }
 
-      const valor = Number(payload.valor || 0);
-      const descricao = String(payload.descricao || "Seguro Prestamista").trim();
-      const accessToken = getMercadoPagoAccessToken();
-      const webhookBase = getWebhookBaseUrl();
-      const maskedToken = accessToken ? `${accessToken.slice(0, 6)}...${accessToken.slice(-4)}` : "N/A";
-      const notificationUrl = webhookBase ? `${webhookBase.replace(/\/$/, "")}/api/pix/mercadopago/webhook` : "";
+        const valor = Number(payload.amount || 0);
+        const externalId = String(payload.external_id || "").trim() || `pedido_${Date.now()}`;
+        const callbackUrl =
+          String(payload.clientCallbackUrl || "").trim() || (getWebhookBaseUrl() ? `${getWebhookBaseUrl().replace(/\/$/, "")}/api/pix/drakepay/webhook` : "");
+        const payer = payload.payer || {};
+        const nome = String(payer.name || "").trim();
+        const email = String(payer.email || "").trim();
+        const documento = String(payer.document || "").replace(/\D/g, "");
 
-      console.log(`[PIX] Valor: ${valor}`);
-      console.log(`[PIX] Descrição: ${descricao}`);
-      console.log(`[PIX] Token (mascarado): ${maskedToken}`);
-      console.log(`[PIX] Webhook: ${notificationUrl || "não configurado"}`);
+        console.log(`[DRAKEPAY] Valor: ${valor}`);
+        console.log(`[DRAKEPAY] External ID: ${externalId}`);
+        console.log(`[DRAKEPAY] Callback: ${callbackUrl || "não configurado"}`);
+        console.log(`[DRAKEPAY] Payer: ${JSON.stringify({ name: nome, email, document: documento })}`);
 
-      if (!accessToken) {
-        respondJson(res, 500, { success: false, message: "Credenciais do Mercado Pago não configuradas" });
-        return;
-      }
+        if (!valor || Number.isNaN(valor) || valor <= 0) {
+          respondJson(res, 400, { success: false, message: "Valor inválido" });
+          return;
+        }
 
-      if (!valor || Number.isNaN(valor) || valor <= 0) {
-        respondJson(res, 400, { success: false, message: "Valor inválido" });
-        return;
-      }
+        if (!nome || !email || !documento) {
+          respondJson(res, 400, { success: false, message: "Dados do pagador inválidos" });
+          return;
+        }
 
-      const mpPayload = {
-        transaction_amount: valor,
-        description: descricao,
-        payment_method_id: "pix",
-        payer: {
-          email: "pagador@bancred.com",
-        },
-      };
+        const tokenResult = await gerarTokenDrakepay();
+        if (!tokenResult.ok) {
+          respondJson(res, 500, {
+            success: false,
+            message: tokenResult.message || "Token do Drakepay indisponível",
+            details: tokenResult.raw || null,
+            status: tokenResult.status || 500,
+          });
+          return;
+        }
 
-      if (notificationUrl) {
-        mpPayload.notification_url = notificationUrl;
-      }
-
-      const requestOptions = {
-        hostname: "api.mercadopago.com",
-        path: "/v1/payments",
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-      };
-
-      const apiReq = https.request(requestOptions, (apiRes) => {
-        let response = "";
-        apiRes.on("data", (chunk) => {
-          response += chunk;
+        const drakePayload = JSON.stringify({
+          amount: valor,
+          external_id: externalId,
+          clientCallbackUrl: callbackUrl || undefined,
+          payer: {
+            name: nome,
+            email,
+            document: documento,
+          },
         });
-        apiRes.on("end", () => {
-          const status = apiRes.statusCode || 200;
-          console.log(`[PIX] Mercado Pago status: ${status}`);
-          console.log(`[PIX] Mercado Pago body: ${response}`);
+
+        try {
+          const { status, body: resposta } = await requestJson(
+            {
+              hostname: "api.drakepay.app",
+              path: "/api/payments/deposit",
+              method: "POST",
+              family: 4,
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${tokenResult.token}`,
+                "Content-Length": Buffer.byteLength(drakePayload),
+              },
+            },
+            drakePayload
+          );
+          console.log(`[DRAKEPAY] Status: ${status}`);
+          console.log(`[DRAKEPAY] Resposta: ${resposta}`);
+          let parsed = null;
           try {
-            const parsed = response ? JSON.parse(response) : {};
-            respondJson(res, status, { success: status < 400, data: parsed });
-          } catch (err) {
-            respondJson(res, 500, { success: false, message: "Erro ao processar resposta do Mercado Pago" });
+            parsed = resposta ? JSON.parse(resposta) : null;
+          } catch {
+            parsed = null;
           }
-        });
-      });
-
-      apiReq.on("error", (err) => {
-        console.log(`[PIX] Erro Mercado Pago: ${err.message}`);
-        respondJson(res, 500, { success: false, message: "Erro ao gerar PIX" });
-      });
-
-      apiReq.write(JSON.stringify(mpPayload));
-      apiReq.end();
+          const transactionId = parsed?.transactionId || parsed?.transaction_id || parsed?.id || "";
+          const qrcode = parsed?.qrcode || parsed?.qrCode || parsed?.qr_code || "";
+          const amount = Number(parsed?.amount || parsed?.valor || valor);
+          if (transactionId && qrcode) {
+            drakepayCache.set(transactionId, {
+              transactionId,
+              qrcode,
+              amount,
+            });
+          }
+          respondJson(res, status, { success: status < 400, data: parsed });
+        } catch (err) {
+          respondJson(res, 500, { success: false, message: "Erro ao gerar PIX" });
+        }
+      })();
     });
     return;
   }
 
-  if (req.method === "GET" && pathname.startsWith("/api/pix/mercadopago/")) {
-    const id = pathname.replace("/api/pix/mercadopago/", "").trim();
-    const accessToken = getMercadoPagoAccessToken();
-    const maskedToken = accessToken ? `${accessToken.slice(0, 6)}...${accessToken.slice(-4)}` : "N/A";
-    console.log(`[PIX] Consulta status em ${new Date().toISOString()}`);
-    console.log(`[PIX] ID: ${id}`);
-    console.log(`[PIX] Token (mascarado): ${maskedToken}`);
-
-    if (!accessToken) {
-      respondJson(res, 500, { success: false, message: "Credenciais do Mercado Pago não configuradas" });
-      return;
-    }
-
+  if (req.method === "GET" && pathname.startsWith("/api/pix/drakepay/")) {
+    const id = pathname.replace("/api/pix/drakepay/", "").trim();
     if (!id) {
       respondJson(res, 400, { success: false, message: "ID inválido" });
       return;
     }
-
-    const requestOptions = {
-      hostname: "api.mercadopago.com",
-      path: `/v1/payments/${encodeURIComponent(id)}`,
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    };
-
-    const apiReq = https.request(requestOptions, (apiRes) => {
-      let response = "";
-      apiRes.on("data", (chunk) => {
-        response += chunk;
-      });
-      apiRes.on("end", () => {
-        const status = apiRes.statusCode || 200;
-        console.log(`[PIX] Mercado Pago status consulta: ${status}`);
-        console.log(`[PIX] Mercado Pago body consulta: ${response}`);
-        try {
-          const parsed = response ? JSON.parse(response) : {};
-          respondJson(res, status, { success: status < 400, data: parsed });
-        } catch (err) {
-          respondJson(res, 500, { success: false, message: "Erro ao processar resposta do Mercado Pago" });
-        }
-      });
-    });
-
-    apiReq.on("error", (err) => {
-      console.log(`[PIX] Erro consulta Mercado Pago: ${err.message}`);
-      respondJson(res, 500, { success: false, message: "Erro ao consultar PIX" });
-    });
-    apiReq.end();
+    const cached = drakepayCache.get(id);
+    if (!cached) {
+      respondJson(res, 404, { success: false, message: "PIX não encontrado" });
+      return;
+    }
+    respondJson(res, 200, { success: true, data: cached });
     return;
   }
 
-  if (req.method === "POST" && pathname === "/api/pix/mercadopago/webhook") {
+  if (req.method === "POST" && pathname === "/api/pix/drakepay/webhook") {
     let body = "";
     req.on("data", (chunk) => {
       body += chunk;
@@ -530,8 +617,6 @@ const server = http.createServer((req, res) => {
       }
     });
     req.on("end", () => {
-      console.log(`[PIX] Webhook recebido em ${new Date().toISOString()}`);
-      console.log(`[PIX] Webhook body: ${body}`);
       respondJson(res, 200, { success: true });
     });
     return;

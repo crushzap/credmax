@@ -22,7 +22,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <header className={isFullScreen ? 'app-header app-header--hidden' : 'app-header'}>
         <div className="brand">
           <div className="brand-icon">$</div>
-          <span>Bancred</span>
+          <span>CredMax</span>
         </div>
       </header>
       <main className="app-main">{children}</main>

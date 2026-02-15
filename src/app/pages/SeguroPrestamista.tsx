@@ -29,7 +29,7 @@ export default function SeguroPrestamista() {
       <div className="prestamista-topo">
         <div className="prestamista-topo__marca">
           <span className="prestamista-topo__icone">$</span>
-          <span>Bancred</span>
+          <span>CredMax</span>
         </div>
       </div>
       <div className="prestamista-container">

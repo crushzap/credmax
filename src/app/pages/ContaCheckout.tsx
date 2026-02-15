@@ -5,6 +5,14 @@ type CheckoutData = {
   seguro?: number
 }
 
+type UserData = {
+  nome?: string
+  NOME?: string
+  cpf?: string
+  CPF?: string
+  email?: string
+}
+
 function formatarMoeda(valor: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)
 }
@@ -20,6 +28,15 @@ export default function ContaCheckout() {
       return null
     }
   }, [])
+  const userData = useMemo<UserData | null>(() => {
+    const bruto = window.sessionStorage.getItem('userData')
+    if (!bruto) return null
+    try {
+      return JSON.parse(bruto) as UserData
+    } catch {
+      return null
+    }
+  }, [])
 
   const seguro = checkout?.seguro ?? 19
   const [ofertaEspecial, setOfertaEspecial] = useState(true)
@@ -30,6 +47,7 @@ export default function ContaCheckout() {
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined
   const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   const apiUrlBase = isLocal ? '/api' : apiBaseUrl
+  const callbackBase = apiUrlBase && !apiUrlBase.startsWith('/') ? apiUrlBase.replace(/\/api\/?$/, '') : ''
 
   async function handleGerarPix() {
     console.log('Gerar PIX: iniciando', {
@@ -42,19 +60,33 @@ export default function ContaCheckout() {
       setErroPix('Não foi possível gerar o PIX agora.')
       return
     }
+    const nome = (userData?.nome || userData?.NOME || '').toString().trim() || 'Cliente'
+    const documento = (userData?.cpf || userData?.CPF || '').toString().replace(/\D/g, '')
+    const emailBase = (userData?.email || '').toString().trim()
+    const email = emailBase || (documento ? `cliente+${documento}@credmax.com` : '')
+    if (!nome || !email || !documento) {
+      setErroPix('Complete seus dados para gerar o PIX.')
+      return
+    }
+    const amountEnvio = Math.trunc(total)
     setGerandoPix(true)
     setErroPix('')
     let url = ''
     try {
-      url = `${apiUrlBase}/pix/mercadopago`
+      url = `${apiUrlBase}/pix/drakepay`
       console.log('Gerar PIX: enviando payload')
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          valor: total,
-          descricao: 'Seguro Prestamista',
-          ofertaEspecial,
+          amount: amountEnvio,
+          external_id: `pedido_${Date.now()}`,
+          clientCallbackUrl: callbackBase ? `${callbackBase}/api/pix/drakepay/webhook` : undefined,
+          payer: {
+            name: nome,
+            email,
+            document: documento,
+          },
         }),
       })
       console.log('Gerar PIX: resposta recebida', {
@@ -66,12 +98,12 @@ export default function ContaCheckout() {
       console.log('Gerar PIX: resposta bruta', texto)
       const resposta = texto ? JSON.parse(texto) : null
       const payload = resposta?.data ?? resposta
-      const id = payload?.id ?? payload?.transactionId ?? payload?.transaction_id
-      const qrCodeBase64 =
-        payload?.qrCodeBase64 ?? payload?.qr_code_base64 ?? payload?.point_of_interaction?.transaction_data?.qr_code_base64
-      const copiaECola = payload?.qrCode ?? payload?.qr_code ?? payload?.point_of_interaction?.transaction_data?.qr_code
-      const expiracao = payload?.expiresAt ?? payload?.date_of_expiration ?? payload?.date_of_expiration
-      if (!id || !copiaECola || !qrCodeBase64) {
+      const id = payload?.transactionId ?? payload?.transaction_id ?? payload?.id
+      const qrCodeBase64 = payload?.qrCodeBase64 ?? payload?.qr_code_base64
+      const copiaECola = payload?.qrcode ?? payload?.qrCode ?? payload?.qr_code
+      const expiracao = payload?.expiresAt ?? payload?.date_of_expiration
+      const totalPago = payload?.amount ?? payload?.valor ?? amountEnvio
+      if (!id || !copiaECola) {
         console.error('Gerar PIX: resposta inválida', payload)
         setErroPix('Não foi possível gerar o PIX agora.')
         setGerandoPix(false)
@@ -81,7 +113,7 @@ export default function ContaCheckout() {
         `pixData:${id}`,
         JSON.stringify({
           id,
-          total,
+          total: totalPago,
           copiaECola,
           qrCodeBase64,
           expiracao,
@@ -106,7 +138,7 @@ export default function ContaCheckout() {
       <div className="checkout-topo">
         <div className="checkout-topo__marca">
           <span className="checkout-topo__icone">$</span>
-          <span>Bancred</span>
+          <span>CredMax</span>
         </div>
         <div className="checkout-topo__seguro">
           <span className="checkout-topo__ponto" />
@@ -204,7 +236,7 @@ export default function ContaCheckout() {
             <div>“Estava atolada em dívida e sem saída. Consegui resolver tudo aqui.”</div>
           </div>
         </div>
-        <div className="checkout-rodape">© 2026 Bancred LTDA. Todos os direitos reservados.</div>
+        <div className="checkout-rodape">© 2026 CredMax LTDA. Todos os direitos reservados.</div>
       </div>
     </div>
   )

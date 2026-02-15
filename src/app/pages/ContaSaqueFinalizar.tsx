@@ -91,7 +91,7 @@ export default function ContaSaqueFinalizar() {
       <div className="finalizar-topo">
         <div className="finalizar-topo__marca">
           <span className="finalizar-topo__icone">$</span>
-          <span>Bancred</span>
+          <span>CredMax</span>
         </div>
         <div className="finalizar-topo__parceiro">
           <img className="finalizar-topo__logo" src="/stellanz.svg" alt="Stellanz" />
