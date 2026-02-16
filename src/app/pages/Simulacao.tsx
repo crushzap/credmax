@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Card from '../components/Card'
 import OptionButton from '../components/OptionButton'
@@ -200,6 +200,12 @@ const statusCpf = [
 const parcelasDisponiveis = [12, 24, 36, 48]
 const diasDisponiveis = [5, 10, 15, 20, 25, 30]
 
+type ModalidadeSelecionada = {
+  id?: string
+  titulo?: string
+  teto?: number
+}
+
 function formatarMoeda(valor: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)
 }
@@ -215,6 +221,16 @@ function calcularPrimeiraParcela(dia: number) {
   return data
 }
 
+function calcularValorLiberado(params: { renda: number; valorDesejado: number; teto: number; piso: number; step: number }) {
+  const tetoRenda = params.renda * 0.5
+  const tetoFinal = Math.min(params.valorDesejado, params.teto, tetoRenda)
+  const tetoArredondado = Math.floor(tetoFinal / params.step) * params.step
+  if (tetoArredondado < params.piso) return 0
+  const quantidadeSteps = Math.floor((tetoArredondado - params.piso) / params.step)
+  const stepAleatorio = Math.floor(Math.random() * (quantidadeSteps + 1))
+  return params.piso + stepAleatorio * params.step
+}
+
 export default function Simulacao() {
   const navigate = useNavigate()
   const [etapa, setEtapa] = useState(0)
@@ -226,8 +242,36 @@ export default function Simulacao() {
   const [valorDesejado, setValorDesejado] = useState(5000)
   const [parcelas, setParcelas] = useState(12)
   const [melhorDia, setMelhorDia] = useState(0)
+  const etapaAnterior = useRef(etapa)
+  const modalidade = useMemo<ModalidadeSelecionada | null>(() => {
+    const bruto = window.sessionStorage.getItem('modalidadeSelecionada')
+    if (!bruto) return null
+    try {
+      return JSON.parse(bruto) as ModalidadeSelecionada
+    } catch {
+      return null
+    }
+  }, [])
 
   const percentual = useMemo(() => ((etapa + 1) / 6) * 100, [etapa])
+  const valorInicialModalidade = useMemo(() => {
+    if (modalidade?.id === 'pessoa-juridica') return 2500
+    if (modalidade?.id === 'negativados') return 750
+    if (modalidade?.id === 'pessoa-fisica') return 750
+    if (situacaoCpf === 'Tenho algumas pendências') return 750
+    if (situacaoCpf === 'Meu nome está limpo') return 750
+    return 500
+  }, [modalidade, situacaoCpf])
+  const pisoModalidade = 500
+  const tetoModalidade = useMemo(() => {
+    if (modalidade?.id === 'negativados') return 4500
+    if (modalidade?.id === 'pessoa-fisica') return 10000
+    if (modalidade?.id === 'pessoa-juridica') return 25000
+    if (typeof modalidade?.teto === 'number') return modalidade.teto
+    if (situacaoCpf === 'Tenho algumas pendências') return 4500
+    if (situacaoCpf === 'Meu nome está limpo') return 10000
+    return 20000
+  }, [modalidade, situacaoCpf])
   const rendaTexto = useMemo(() => formatarMoeda(renda), [renda])
   const valorTexto = useMemo(() => formatarMoeda(valorDesejado), [valorDesejado])
   const taxa = useMemo(() => 0.2048 * (parcelas / 12), [parcelas])
@@ -237,6 +281,22 @@ export default function Simulacao() {
   const parcelaTexto = useMemo(() => formatarMoeda(parcelaMensal), [parcelaMensal])
   const primeiraParcela = useMemo(() => calcularPrimeiraParcela(melhorDia), [melhorDia])
   const primeiraParcelaTexto = useMemo(() => (primeiraParcela ? primeiraParcela.toLocaleDateString('pt-BR') : ''), [primeiraParcela])
+  const rendaAprovada = useMemo(() => renda >= 1000, [renda])
+
+  useEffect(() => {
+    if (etapa === 4 && etapaAnterior.current !== 4) {
+      setValorDesejado(valorInicialModalidade)
+    }
+    etapaAnterior.current = etapa
+  }, [etapa, valorInicialModalidade])
+
+  useEffect(() => {
+    setValorDesejado((atual) => {
+      if (atual < pisoModalidade) return pisoModalidade
+      if (atual > tetoModalidade) return tetoModalidade
+      return atual
+    })
+  }, [tetoModalidade])
 
   const podeContinuar = useMemo(() => {
     if (etapa === 0) return Boolean(motivo)
@@ -251,11 +311,29 @@ export default function Simulacao() {
   function avancar() {
     if (!podeContinuar) return
     if (etapa === 5) {
+      if (!rendaAprovada) {
+        navigate('/reprovado')
+        return
+      }
+      const valorLiberado = calcularValorLiberado({
+        renda,
+        valorDesejado,
+        teto: tetoModalidade,
+        piso: pisoModalidade,
+        step: 250,
+      })
+      if (!valorLiberado) {
+        navigate('/reprovado')
+        return
+      }
+      const totalPagarLiberado = valorLiberado * (1 + taxa)
+      const parcelaMensalLiberada = totalPagarLiberado / parcelas
       const simulacao = {
         valorDesejado,
+        valorLiberado,
         parcelas,
-        parcelaMensal,
-        totalPagar,
+        parcelaMensal: parcelaMensalLiberada,
+        totalPagar: totalPagarLiberado,
         primeiraParcela: primeiraParcelaTexto,
         diaVencimento: melhorDia,
       }
@@ -363,21 +441,23 @@ export default function Simulacao() {
             <div className="valor-box">
               <div>
                 <span>Valor desejado</span>
+                <br />
+                <br />
                 <strong>{valorTexto}</strong>
               </div>
             </div>
             <input
               type="range"
               className="range"
-              min={1000}
-              max={20000}
-              step={500}
+              min={pisoModalidade}
+              max={tetoModalidade}
+              step={250}
               value={valorDesejado}
               onChange={(event) => setValorDesejado(Number(event.target.value))}
             />
             <div className="range-labels">
-              <span>R$ 1.000,00</span>
-              <span>R$ 20.000,00</span>
+              <span>{formatarMoeda(pisoModalidade)}</span>
+              <span>{formatarMoeda(tetoModalidade)}</span>
             </div>
             <div className="parcelas-grid">
               {parcelasDisponiveis.map((parcela) => (

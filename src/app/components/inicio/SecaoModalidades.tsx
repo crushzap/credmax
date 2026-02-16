@@ -8,8 +8,8 @@ const modalidades = [
     titulo: 'Para Negativados',
     descricao: 'CPF com restrições no Serasa/SPC',
     extra: '1ª parcela em 90 dias',
-    faixa: 'R$ 18.000',
-    teto: 18000,
+    faixa: 'R$ 4.500',
+    teto: 4500,
     testId: 'button-simulate-negativados',
     icone: (
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -25,8 +25,8 @@ const modalidades = [
     titulo: 'Pessoa Física',
     descricao: 'CPF sem restrições, tire planos do papel',
     extra: '1ª parcela em 90 dias',
-    faixa: 'R$ 27.000',
-    teto: 27000,
+    faixa: 'R$ 10.000',
+    teto: 10000,
     testId: 'button-simulate-pf',
     icone: (
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -42,8 +42,8 @@ const modalidades = [
     titulo: 'Pessoa Jurídica',
     descricao: 'Capital de giro para sua empresa crescer',
     extra: '1ª parcela em 120 dias',
-    faixa: 'R$ 50.000',
-    teto: 50000,
+    faixa: 'R$ 25.000',
+    teto: 25000,
     testId: 'button-simulate-pj',
     icone: (
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

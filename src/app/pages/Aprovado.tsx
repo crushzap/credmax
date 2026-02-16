@@ -13,6 +13,7 @@ export default function Aprovado() {
     try {
       return JSON.parse(bruto) as {
         valorDesejado: number
+        valorLiberado?: number
         parcelas: number
         parcelaMensal: number
         totalPagar: number
@@ -24,7 +25,7 @@ export default function Aprovado() {
     }
   }, [])
 
-  const valorLiberado = dados?.valorDesejado ?? 12200
+  const valorLiberado = dados?.valorLiberado ?? dados?.valorDesejado ?? 12200
   const parcelas = dados?.parcelas ?? 48
   const parcelaMensal = dados?.parcelaMensal ?? 481.96
   const primeiraParcela = dados?.primeiraParcela ?? new Date().toLocaleDateString('pt-BR')

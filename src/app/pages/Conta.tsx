@@ -7,6 +7,7 @@ function formatarMoeda(valor: number) {
 
 type SimulacaoData = {
   valorDesejado: number
+  valorLiberado?: number
   parcelas: number
   parcelaMensal: number
   totalPagar: number
@@ -43,7 +44,7 @@ export default function Conta() {
   }, [])
 
   const nome = userData?.nome || userData?.NOME || ''
-  const valorDisponivel = simulacao?.valorDesejado ?? 0
+  const valorDisponivel = simulacao?.valorLiberado ?? simulacao?.valorDesejado ?? 0
   const parcelaMensal = simulacao?.parcelaMensal ?? 0
   const primeiraParcela = simulacao?.primeiraParcela || ''
 

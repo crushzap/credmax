@@ -29,7 +29,7 @@ export default function CartaoModalidade({
         <h3 className="modalidade-card__titulo">{titulo}</h3>
         <p className="modalidade-card__descricao">{descricao}</p>
         <div className="modalidade-card__extra">{extra}</div>
-        <p className="modalidade-card__faixa-label">De R$1.000,00 até</p>
+        <p className="modalidade-card__faixa-label">De R$250,00 até</p>
         <p className="modalidade-card__faixa-valor">{faixa}</p>
         <button className="botao-gradiente botao-gradiente--full" type="button" onClick={onSimular} data-testid={testId}>
           Simular Grátis

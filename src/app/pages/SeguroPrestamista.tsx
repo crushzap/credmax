@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 type SimulacaoData = {
   valorDesejado: number
+  valorLiberado?: number
 }
 
 function formatarMoeda(valor: number) {
@@ -22,7 +23,7 @@ export default function SeguroPrestamista() {
     }
   }, [])
 
-  const valor = simulacao?.valorDesejado ?? 0
+  const valor = simulacao?.valorLiberado ?? simulacao?.valorDesejado ?? 0
 
   return (
     <div className="prestamista-page">

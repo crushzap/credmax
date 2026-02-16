@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 type SimulacaoData = {
   valorDesejado: number
+  valorLiberado?: number
 }
 
 type UserData = {
@@ -68,7 +69,7 @@ export default function ContaSaqueConfirmar() {
     }
   }, [])
 
-  const valor = simulacao?.valorDesejado ?? 0
+  const valor = simulacao?.valorLiberado ?? simulacao?.valorDesejado ?? 0
   const nome = userData?.nome || userData?.NOME || ''
   const cpf = userData?.cpf || userData?.CPF || ''
   const tipoLabel = obterTipoLabel(saqueData?.tipo)

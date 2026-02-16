@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 type SimulacaoData = {
   valorDesejado: number
+  valorLiberado?: number
   parcelas: number
   parcelaMensal: number
 }
@@ -39,7 +40,7 @@ export default function ContaSaqueFinalizar() {
       return null
     }
   }, [])
-  const valor = simulacao?.valorDesejado ?? 5000
+  const valor = simulacao?.valorLiberado ?? simulacao?.valorDesejado ?? 5000
   const parcelasAprovadas = simulacao?.parcelas ?? 12
   const parcelaMensal = simulacao?.parcelaMensal ?? 502.01
   const tetoModalidade = modalidade?.teto ?? 20000

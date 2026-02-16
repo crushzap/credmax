@@ -16,6 +16,7 @@ import Endereco from './pages/Endereco.tsx'
 import EmConstrucao from './pages/EmConstrucao.tsx'
 import Inicio from './pages/Inicio.tsx'
 import Pessoa from './pages/Pessoa.tsx'
+import Reprovado from './pages/Reprovado.tsx'
 import Simulacao from './pages/Simulacao.tsx'
 
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="/pessoa" element={<Pessoa />} />
           <Route path="/analise" element={<Analise />} />
           <Route path="/aprovado" element={<Aprovado />} />
+          <Route path="/reprovado" element={<Reprovado />} />
           <Route path="/configurando-conta" element={<ConfigurandoConta />} />
           <Route path="/conta" element={<Conta />} />
           <Route path="/conta/saque" element={<ContaSaque />} />
