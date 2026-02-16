@@ -232,7 +232,6 @@ async function gerarTokenDrakepay() {
   if (!clientId || !clientSecret) {
     return { ok: false, message: "Credenciais do Drakepay não configuradas" };
   }
-  console.log(`[DRAKEPAY] Iniciando login`);
   const payload = JSON.stringify({ client_id: clientId, client_secret: clientSecret });
   const { status, body } = await requestJson(
     {
@@ -247,8 +246,6 @@ async function gerarTokenDrakepay() {
     },
     payload
   );
-  console.log(`[DRAKEPAY] Login status: ${status}`);
-  console.log(`[DRAKEPAY] Login resposta: ${body}`);
   let parsed = null;
   try {
     parsed = body ? JSON.parse(body) : null;
@@ -258,9 +255,9 @@ async function gerarTokenDrakepay() {
   const token = parsed?.token;
   if (!token) {
     const detalhe = parsed?.message || parsed?.error || "Token do Drakepay indisponível";
-    return { ok: false, message: detalhe, status, raw: parsed };
+    return { ok: false, message: detalhe, status };
   }
-  return { ok: true, token, status, raw: parsed };
+  return { ok: true, token, status };
 }
 
 function respondJson(res, status, data, extraHeaders) {
@@ -310,7 +307,6 @@ const server = http.createServer(async (req, res) => {
     });
     req.on("end", () => {
       console.log(`[CPF] Requisição recebida em ${new Date().toISOString()}`);
-      console.log(`[CPF] Body bruto: ${body}`);
       let cpf = "";
       try {
         const parsed = body ? JSON.parse(body) : {};
@@ -330,7 +326,6 @@ const server = http.createServer(async (req, res) => {
       const apiKey = getRapidApiKey();
       const apiHost = getRapidApiHost();
       const maskedKey = apiKey ? `${apiKey.slice(0, 6)}...${apiKey.slice(-4)}` : "N/A";
-      console.log(`[CPF] CPF recebido: ${cpf}`);
       console.log(`[CPF] Host RapidAPI: ${apiHost}`);
       console.log(`[CPF] Key RapidAPI (mascarada): ${maskedKey}`);
 
@@ -357,7 +352,6 @@ const server = http.createServer(async (req, res) => {
         });
         apiRes.on("end", () => {
           console.log(`[CPF] Status RapidAPI: ${apiRes.statusCode}`);
-          console.log(`[CPF] Resposta RapidAPI: ${response}`);
           try {
             const parsed = response ? JSON.parse(response) : {};
             if (parsed.code !== 200 || !parsed.data) {
@@ -514,10 +508,6 @@ const server = http.createServer(async (req, res) => {
         const email = String(payer.email || "").trim();
         const documento = String(payer.document || "").replace(/\D/g, "");
 
-        console.log(`[DRAKEPAY] Valor: ${valor}`);
-        console.log(`[DRAKEPAY] External ID: ${externalId}`);
-        console.log(`[DRAKEPAY] Callback: ${callbackUrl || "não configurado"}`);
-        console.log(`[DRAKEPAY] Payer: ${JSON.stringify({ name: nome, email, document: documento })}`);
 
         if (!valor || Number.isNaN(valor) || valor <= 0) {
           respondJson(res, 400, { success: false, message: "Valor inválido" });
@@ -534,7 +524,6 @@ const server = http.createServer(async (req, res) => {
           respondJson(res, 500, {
             success: false,
             message: tokenResult.message || "Token do Drakepay indisponível",
-            details: tokenResult.raw || null,
             status: tokenResult.status || 500,
           });
           return;
@@ -566,8 +555,6 @@ const server = http.createServer(async (req, res) => {
             },
             drakePayload
           );
-          console.log(`[DRAKEPAY] Status: ${status}`);
-          console.log(`[DRAKEPAY] Resposta: ${resposta}`);
           let parsed = null;
           try {
             parsed = resposta ? JSON.parse(resposta) : null;
