@@ -1,16 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useBancredSession } from '../hooks/useBancredSession'
 
 type CheckoutData = {
   seguro?: number
-}
-
-type UserData = {
-  nome?: string
-  NOME?: string
-  cpf?: string
-  CPF?: string
-  email?: string
 }
 
 function formatarMoeda(valor: number) {
@@ -19,20 +12,12 @@ function formatarMoeda(valor: number) {
 
 export default function ContaCheckout() {
   const navigate = useNavigate()
+  const { user } = useBancredSession()
   const checkout = useMemo<CheckoutData | null>(() => {
     const bruto = window.sessionStorage.getItem('checkoutData')
     if (!bruto) return null
     try {
       return JSON.parse(bruto) as CheckoutData
-    } catch {
-      return null
-    }
-  }, [])
-  const userData = useMemo<UserData | null>(() => {
-    const bruto = window.sessionStorage.getItem('userData')
-    if (!bruto) return null
-    try {
-      return JSON.parse(bruto) as UserData
     } catch {
       return null
     }
@@ -60,9 +45,9 @@ export default function ContaCheckout() {
       setErroPix('Não foi possível gerar o PIX agora.')
       return
     }
-    const nome = (userData?.nome || userData?.NOME || '').toString().trim() || 'Cliente'
-    const documento = (userData?.cpf || userData?.CPF || '').toString().replace(/\D/g, '')
-    const emailBase = (userData?.email || '').toString().trim()
+    const nome = (user?.nome || user?.NOME || '').toString().trim() || 'Cliente'
+    const documento = (user?.cpf || user?.CPF || '').toString().replace(/\D/g, '')
+    const emailBase = (user?.email || '').toString().trim()
     const email = emailBase || (documento ? `cliente+${documento}@credmax.com` : '')
     if (!nome || !email || !documento) {
       setErroPix('Complete seus dados para gerar o PIX.')

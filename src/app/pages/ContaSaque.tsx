@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useBancredSession } from '../hooks/useBancredSession'
 
 const opcoes = [
   { value: 'cpf', label: 'CPF', placeholder: 'Digite seu CPF' },
@@ -146,15 +147,6 @@ const bancosDisponiveis = [
   '124 - WOORI BANK DO BRASIL S.A',
 ]
 
-type SimulacaoData = {
-  valorDesejado: number
-}
-
-type UserData = {
-  cpf?: string
-  CPF?: string
-}
-
 type SaqueData = {
   tipo: string
   chave: string
@@ -197,32 +189,15 @@ function normalizarTexto(valor: string) {
 
 export default function ContaSaque() {
   const navigate = useNavigate()
+  const { user, loan } = useBancredSession()
   const [tipo, setTipo] = useState('cpf')
   const [chave, setChave] = useState('')
   const [banco, setBanco] = useState('')
   const [mostrarBancos, setMostrarBancos] = useState(false)
 
   const opcaoSelecionada = opcoes.find((opcao) => opcao.value === tipo) || opcoes[0]
-  const simulacao = useMemo<SimulacaoData | null>(() => {
-    const bruto = window.sessionStorage.getItem('simulacaoData')
-    if (!bruto) return null
-    try {
-      return JSON.parse(bruto) as SimulacaoData
-    } catch {
-      return null
-    }
-  }, [])
-  const userData = useMemo<UserData | null>(() => {
-    const bruto = window.sessionStorage.getItem('userData')
-    if (!bruto) return null
-    try {
-      return JSON.parse(bruto) as UserData
-    } catch {
-      return null
-    }
-  }, [])
-  const valorDisponivel = simulacao?.valorDesejado ?? 0
-  const cpfUsuario = userData?.cpf || userData?.CPF || ''
+  const valorDisponivel = loan?.valorDesejado ?? 0
+  const cpfUsuario = user?.cpf || user?.CPF || ''
 
   useEffect(() => {
     if (tipo === 'cpf') {

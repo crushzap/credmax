@@ -1,17 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-
-type SimulacaoData = {
-  valorDesejado: number
-  valorLiberado?: number
-}
-
-type UserData = {
-  nome?: string
-  NOME?: string
-  cpf?: string
-  CPF?: string
-}
+import { useBancredSession } from '../hooks/useBancredSession'
 
 type SaqueData = {
   tipo?: string
@@ -41,24 +30,7 @@ function obterTipoLabel(tipo?: string) {
 
 export default function ContaSaqueConfirmar() {
   const navigate = useNavigate()
-  const simulacao = useMemo<SimulacaoData | null>(() => {
-    const bruto = window.sessionStorage.getItem('simulacaoData')
-    if (!bruto) return null
-    try {
-      return JSON.parse(bruto) as SimulacaoData
-    } catch {
-      return null
-    }
-  }, [])
-  const userData = useMemo<UserData | null>(() => {
-    const bruto = window.sessionStorage.getItem('userData')
-    if (!bruto) return null
-    try {
-      return JSON.parse(bruto) as UserData
-    } catch {
-      return null
-    }
-  }, [])
+  const { user, loan } = useBancredSession()
   const saqueData = useMemo<SaqueData | null>(() => {
     const bruto = window.sessionStorage.getItem('saqueData')
     if (!bruto) return null
@@ -69,9 +41,9 @@ export default function ContaSaqueConfirmar() {
     }
   }, [])
 
-  const valor = simulacao?.valorLiberado ?? simulacao?.valorDesejado ?? 0
-  const nome = userData?.nome || userData?.NOME || ''
-  const cpf = userData?.cpf || userData?.CPF || ''
+  const valor = loan?.valorLiberado ?? loan?.valorDesejado ?? 0
+  const nome = user?.nome || user?.NOME || ''
+  const cpf = user?.cpf || user?.CPF || ''
   const tipoLabel = obterTipoLabel(saqueData?.tipo)
   const chave = saqueData?.chave || ''
   const banco = saqueData?.banco || ''

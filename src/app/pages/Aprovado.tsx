@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useBancredSession } from '../hooks/useBancredSession'
 
 function formatarMoeda(valor: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)
@@ -7,28 +7,17 @@ function formatarMoeda(valor: number) {
 
 export default function Aprovado() {
   const navigate = useNavigate()
-  const dados = useMemo(() => {
-    const bruto = window.sessionStorage.getItem('simulacaoData')
-    if (!bruto) return null
-    try {
-      return JSON.parse(bruto) as {
-        valorDesejado: number
-        valorLiberado?: number
-        parcelas: number
-        parcelaMensal: number
-        totalPagar: number
-        primeiraParcela: string
-        diaVencimento: number
-      }
-    } catch {
-      return null
-    }
-  }, [])
+  const { user, loan } = useBancredSession()
 
-  const valorLiberado = dados?.valorLiberado ?? dados?.valorDesejado ?? 12200
-  const parcelas = dados?.parcelas ?? 48
-  const parcelaMensal = dados?.parcelaMensal ?? 481.96
-  const primeiraParcela = dados?.primeiraParcela ?? new Date().toLocaleDateString('pt-BR')
+  const valorLiberado = loan?.valorLiberado ?? loan?.valorDesejado ?? 0
+  const parcelas = loan?.parcelas ?? 0
+  const parcelaMensal = loan?.parcelaMensal ?? 0
+  
+  // Se não tiver data definida, assume hoje + 30 dias ou mantém lógica anterior
+  const primeiraParcela = loan?.primeiraParcela ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR')
+
+  // Extrai o primeiro nome para exibir
+  const primeiroNome = user?.nome ? user.nome.split(' ')[0] : 'Cliente'
 
   return (
     <div className="aprovado-page">
@@ -39,7 +28,7 @@ export default function Aprovado() {
             <path d="m9 11 3 3L22 4" />
           </svg>
         </div>
-        <h2>Parabéns, Ivan!</h2>
+        <h2>Parabéns, {primeiroNome}!</h2>
         <p className="aprovado-subtitulo">Empréstimo APROVADO!</p>
         <p className="aprovado-nota">O valor já está reservado para você.</p>
         <div className="aprovado-valor">

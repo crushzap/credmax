@@ -1,10 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-
-type SimulacaoData = {
-  valorDesejado: number
-  valorLiberado?: number
-}
+import { useBancredSession } from '../hooks/useBancredSession'
 
 function formatarMoeda(valor: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)
@@ -13,17 +9,9 @@ function formatarMoeda(valor: number) {
 export default function SeguroPrestamista() {
   const navigate = useNavigate()
   const [opcao, setOpcao] = useState('')
-  const simulacao = useMemo<SimulacaoData | null>(() => {
-    const bruto = window.sessionStorage.getItem('simulacaoData')
-    if (!bruto) return null
-    try {
-      return JSON.parse(bruto) as SimulacaoData
-    } catch {
-      return null
-    }
-  }, [])
+  const { loan } = useBancredSession()
 
-  const valor = simulacao?.valorLiberado ?? simulacao?.valorDesejado ?? 0
+  const valor = loan?.valorLiberado ?? loan?.valorDesejado ?? 0
 
   return (
     <div className="prestamista-page">

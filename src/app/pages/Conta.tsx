@@ -1,52 +1,18 @@
-import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useBancredSession } from '../hooks/useBancredSession'
 
 function formatarMoeda(valor: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)
 }
 
-type SimulacaoData = {
-  valorDesejado: number
-  valorLiberado?: number
-  parcelas: number
-  parcelaMensal: number
-  totalPagar: number
-  primeiraParcela: string
-  diaVencimento: number
-}
-
-type UserData = {
-  nome?: string
-  NOME?: string
-  cpf?: string
-  CPF?: string
-}
-
 export default function Conta() {
   const navigate = useNavigate()
-  const simulacao = useMemo<SimulacaoData | null>(() => {
-    const bruto = window.sessionStorage.getItem('simulacaoData')
-    if (!bruto) return null
-    try {
-      return JSON.parse(bruto) as SimulacaoData
-    } catch {
-      return null
-    }
-  }, [])
-  const userData = useMemo<UserData | null>(() => {
-    const bruto = window.sessionStorage.getItem('userData')
-    if (!bruto) return null
-    try {
-      return JSON.parse(bruto) as UserData
-    } catch {
-      return null
-    }
-  }, [])
+  const { user, loan } = useBancredSession()
 
-  const nome = userData?.nome || userData?.NOME || ''
-  const valorDisponivel = simulacao?.valorLiberado ?? simulacao?.valorDesejado ?? 0
-  const parcelaMensal = simulacao?.parcelaMensal ?? 0
-  const primeiraParcela = simulacao?.primeiraParcela || ''
+  const nome = user?.nome || user?.NOME || ''
+  const valorDisponivel = loan?.valorLiberado ?? loan?.valorDesejado ?? 0
+  const parcelaMensal = loan?.parcelaMensal ?? 0
+  const primeiraParcela = loan?.primeiraParcela || ''
 
   return (
     <div className="conta-page">
