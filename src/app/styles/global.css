@@ -3294,6 +3294,7 @@ body {
 
   .inicio-hero__acao-mobile {
     display: block;
+    margin-top: 24px;
   }
 }
 
