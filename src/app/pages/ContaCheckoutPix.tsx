@@ -10,14 +10,13 @@ type PixData = {
 }
 
 function formatarMoeda(valor: number) {
-  const valorReais = valor / 100
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
     useGrouping: false,
-  }).format(valorReais)
+  }).format(valor)
 }
 
 function calcularTempoRestante(expiracao?: string) {
@@ -37,6 +36,7 @@ export default function ContaCheckoutPix() {
   const [erro, setErro] = useState('')
   const [tempo, setTempo] = useState('')
   const [copiado, setCopiado] = useState(false)
+  const [qrSrc, setQrSrc] = useState<string>('')
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined
   const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   const apiUrlBase = isLocal ? '/api' : apiBaseUrl
@@ -75,12 +75,13 @@ export default function ContaCheckoutPix() {
     }
     const buscar = async () => {
       try {
-        const response = await fetch(`${apiUrlBase}/pix/drakepay/${id}`)
+        const response = await fetch(`${apiUrlBase}/pix/econixpay/${id}`)
         const resposta = await response.json()
         const payload = resposta?.data ?? resposta
-        const qrCodeBase64 = payload?.qrCodeBase64 ?? payload?.qr_code_base64
-        const copiaECola = payload?.qrcode ?? payload?.qrCode ?? payload?.qr_code ?? payload?.copiaECola
-        const total = payload?.amount ?? payload?.valor ?? payload?.total ?? cache?.total ?? 0
+        const container = payload?.qrCodeResponse ?? payload
+        const qrCodeBase64 = container?.qrCodeBase64 ?? container?.qr_code_base64
+        const copiaECola = container?.qrcode ?? container?.qrCode ?? container?.qr_code ?? container?.copiaECola
+        const total = container?.amount ?? container?.valor ?? container?.total ?? cache?.total ?? 0
         const expiracao = expiracaoPadrao
         if (!copiaECola) {
           if (!cache) setErro('PIX não encontrado.')
@@ -94,6 +95,11 @@ export default function ContaCheckoutPix() {
           expiracao,
         }
         setDados(atualizado)
+        // define a origem da imagem do QR: preferir interno e fallback externo
+        if (!qrCodeBase64 && copiaECola) {
+          const interno = apiUrlBase ? `${apiUrlBase}/pix/econixpay/qr-image?size=240x240&data=${encodeURIComponent(copiaECola)}` : ''
+          setQrSrc(interno || `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(copiaECola)}`)
+        }
         window.sessionStorage.setItem(`pixData:${id}`, JSON.stringify(atualizado))
       } catch {
         if (!cache) setErro('PIX não encontrado.')
@@ -122,7 +128,7 @@ export default function ContaCheckoutPix() {
   }
 
   const qrCodeUrl = dados?.copiaECola
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(dados.copiaECola)}`
+    ? qrSrc || `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(dados.copiaECola)}`
     : ''
 
   return (

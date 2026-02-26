@@ -58,7 +58,7 @@ export default function ContaCheckout() {
     setErroPix('')
     let url = ''
     try {
-      url = `${apiUrlBase}/pix/drakepay`
+      url = `${apiUrlBase}/pix/econixpay`
       console.log('Gerar PIX: enviando payload')
       const response = await fetch(url, {
         method: 'POST',
@@ -66,7 +66,7 @@ export default function ContaCheckout() {
         body: JSON.stringify({
           amount: amountEnvio,
           external_id: `pedido_${Date.now()}`,
-          clientCallbackUrl: callbackBase ? `${callbackBase}/api/pix/drakepay/webhook` : undefined,
+          clientCallbackUrl: callbackBase ? `${callbackBase}/api/pix/econixpay/webhook` : undefined,
           payer: {
             name: nome,
             email,
@@ -83,11 +83,12 @@ export default function ContaCheckout() {
       console.log('Gerar PIX: resposta bruta', texto)
       const resposta = texto ? JSON.parse(texto) : null
       const payload = resposta?.data ?? resposta
-      const id = payload?.transactionId ?? payload?.transaction_id ?? payload?.id
-      const qrCodeBase64 = payload?.qrCodeBase64 ?? payload?.qr_code_base64
-      const copiaECola = payload?.qrcode ?? payload?.qrCode ?? payload?.qr_code
-      const expiracao = payload?.expiresAt ?? payload?.date_of_expiration
-      const totalPago = payload?.amount ?? payload?.valor ?? amountEnvio
+      const container = payload?.qrCodeResponse ?? payload
+      const id = container?.transactionId ?? container?.transaction_id ?? container?.id
+      const qrCodeBase64 = container?.qrCodeBase64 ?? container?.qr_code_base64
+      const copiaECola = container?.qrcode ?? container?.qrCode ?? container?.qr_code
+      const expiracao = container?.expiresAt ?? container?.date_of_expiration
+      const totalPago = container?.amount ?? container?.valor ?? amountEnvio
       if (!id || !copiaECola) {
         console.error('Gerar PIX: resposta inválida', payload)
         setErroPix('Não foi possível gerar o PIX agora.')

@@ -35,7 +35,7 @@ const mimeTypes = {
 
 const distDir = path.join(rootDir, "dist");
 const distIndex = path.join(distDir, "index.html");
-const drakepayCache = new Map();
+const econixpayCache = new Map();
 
 const entryPoints = {
   inicio: "inicio.html",
@@ -171,12 +171,12 @@ function getWebhookBaseUrl() {
   return process.env.WEBHOOK_BASE_URL || "";
 }
 
-function getDrakepayClientId() {
-  return process.env.DRAKEPAY_CLIENT_ID || "";
+function getEconixClientId() {
+  return process.env.ECONIX_CLIENT_ID || "";
 }
 
-function getDrakepayClientSecret() {
-  return process.env.DRAKEPAY_CLIENT_SECRET || "";
+function getEconixClientSecret() {
+  return process.env.ECONIX_CLIENT_SECRET || "";
 }
 
 function requestJson(options, body) {
@@ -226,16 +226,21 @@ async function obterIpPublico() {
   };
 }
 
-async function gerarTokenDrakepay() {
-  const clientId = getDrakepayClientId();
-  const clientSecret = getDrakepayClientSecret();
+const econixTokenCache = { token: "", expiresAt: 0 };
+
+async function gerarTokenEconix({ forceNew } = { forceNew: false }) {
+  const clientId = getEconixClientId();
+  const clientSecret = getEconixClientSecret();
   if (!clientId || !clientSecret) {
-    return { ok: false, message: "Credenciais do Drakepay não configuradas" };
+    return { ok: false, message: "Credenciais do EconixPay não configuradas" };
+  }
+  if (!forceNew && econixTokenCache.token && Date.now() < econixTokenCache.expiresAt) {
+    return { ok: true, token: econixTokenCache.token, status: 200, cached: true };
   }
   const payload = JSON.stringify({ client_id: clientId, client_secret: clientSecret });
   const { status, body } = await requestJson(
     {
-      hostname: "api.drakepay.app",
+      hostname: "api.econixhub.com",
       path: "/api/auth/login",
       method: "POST",
       family: 4,
@@ -254,9 +259,12 @@ async function gerarTokenDrakepay() {
   }
   const token = parsed?.token;
   if (!token) {
-    const detalhe = parsed?.message || parsed?.error || "Token do Drakepay indisponível";
+    const detalhe = parsed?.message || parsed?.error || "Token do EconixPay indisponível";
     return { ok: false, message: detalhe, status };
   }
+  // cache por até 55 minutos
+  econixTokenCache.token = token;
+  econixTokenCache.expiresAt = Date.now() + 55 * 60 * 1000;
   return { ok: true, token, status };
 }
 
@@ -480,7 +488,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "POST" && pathname === "/api/pix/drakepay") {
+  if (req.method === "POST" && pathname === "/api/pix/econixpay") {
     let body = "";
     req.on("data", (chunk) => {
       body += chunk;
@@ -490,7 +498,7 @@ const server = http.createServer(async (req, res) => {
     });
     req.on("end", () => {
       (async () => {
-        console.log(`[DRAKEPAY] Requisição recebida em ${new Date().toISOString()}`);
+        console.log(`[ECONIXPAY] Requisição recebida em ${new Date().toISOString()}`);
         let payload = {};
         try {
           payload = body ? JSON.parse(body) : {};
@@ -502,7 +510,7 @@ const server = http.createServer(async (req, res) => {
         const valor = Number(payload.amount || 0);
         const externalId = String(payload.external_id || "").trim() || `pedido_${Date.now()}`;
         const callbackUrl =
-          String(payload.clientCallbackUrl || "").trim() || (getWebhookBaseUrl() ? `${getWebhookBaseUrl().replace(/\/$/, "")}/api/pix/drakepay/webhook` : "");
+          String(payload.clientCallbackUrl || "").trim() || (getWebhookBaseUrl() ? `${getWebhookBaseUrl().replace(/\/$/, "")}/api/pix/econixpay/webhook` : "");
         const payer = payload.payer || {};
         const nome = String(payer.name || "").trim();
         const email = String(payer.email || "").trim();
@@ -519,17 +527,17 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
-        const tokenResult = await gerarTokenDrakepay();
+        const tokenResult = await gerarTokenEconix({ forceNew: false });
         if (!tokenResult.ok) {
           respondJson(res, 500, {
             success: false,
-            message: tokenResult.message || "Token do Drakepay indisponível",
+            message: tokenResult.message || "Token do EconixPay indisponível",
             status: tokenResult.status || 500,
           });
           return;
         }
 
-        const drakePayload = JSON.stringify({
+        const econixPayload = JSON.stringify({
           amount: valor,
           external_id: externalId,
           clientCallbackUrl: callbackUrl || undefined,
@@ -543,17 +551,17 @@ const server = http.createServer(async (req, res) => {
         try {
           const { status, body: resposta } = await requestJson(
             {
-              hostname: "api.drakepay.app",
+              hostname: "api.econixhub.com",
               path: "/api/payments/deposit",
               method: "POST",
               family: 4,
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${tokenResult.token}`,
-                "Content-Length": Buffer.byteLength(drakePayload),
+                "Content-Length": Buffer.byteLength(econixPayload),
               },
             },
-            drakePayload
+            econixPayload
           );
           let parsed = null;
           try {
@@ -561,11 +569,13 @@ const server = http.createServer(async (req, res) => {
           } catch {
             parsed = null;
           }
-          const transactionId = parsed?.transactionId || parsed?.transaction_id || parsed?.id || "";
-          const qrcode = parsed?.qrcode || parsed?.qrCode || parsed?.qr_code || "";
-          const amount = Number(parsed?.amount || parsed?.valor || valor);
+          // compatibilidade com possíveis formatos de resposta
+          const container = parsed?.qrCodeResponse || parsed || {};
+          const transactionId = container?.transactionId || container?.transaction_id || container?.id || "";
+          const qrcode = container?.qrcode || container?.qrCode || container?.qr_code || "";
+          const amount = Number(container?.amount || container?.valor || valor);
           if (transactionId && qrcode) {
-            drakepayCache.set(transactionId, {
+            econixpayCache.set(transactionId, {
               transactionId,
               qrcode,
               amount,
@@ -580,13 +590,38 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && pathname.startsWith("/api/pix/drakepay/")) {
-    const id = pathname.replace("/api/pix/drakepay/", "").trim();
+  if (req.method === "GET" && pathname.startsWith("/api/pix/econixpay/qr-image")) {
+    const data = url.searchParams.get("data") || url.searchParams.get("text") || "";
+    const size = url.searchParams.get("size") || "240x240";
+    if (!data) {
+      send(res, 400, "Parâmetro 'data' obrigatório", "text/plain; charset=utf-8");
+      return;
+    }
+    const pathQr = `/v1/create-qr-code/?size=${encodeURIComponent(size)}&data=${encodeURIComponent(data)}`;
+    const qrReq = https.request(
+      { hostname: "api.qrserver.com", path: pathQr, method: "GET", family: 4 },
+      (qrRes) => {
+        const contentType = qrRes.headers["content-type"] || "image/png";
+        res.writeHead(qrRes.statusCode || 200, {
+          "Content-Type": contentType,
+          "Cache-Control": "no-store",
+          "Access-Control-Allow-Origin": "*",
+        });
+        qrRes.pipe(res);
+      }
+    );
+    qrReq.on("error", () => send(res, 500, "Erro ao gerar QR Code"));
+    qrReq.end();
+    return;
+  }
+
+  if (req.method === "GET" && pathname.startsWith("/api/pix/econixpay/")) {
+    const id = pathname.replace("/api/pix/econixpay/", "").trim();
     if (!id) {
       respondJson(res, 400, { success: false, message: "ID inválido" });
       return;
     }
-    const cached = drakepayCache.get(id);
+    const cached = econixpayCache.get(id);
     if (!cached) {
       respondJson(res, 404, { success: false, message: "PIX não encontrado" });
       return;
@@ -595,7 +630,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "POST" && pathname === "/api/pix/drakepay/webhook") {
+  if (req.method === "POST" && pathname === "/api/pix/econixpay/webhook") {
     let body = "";
     req.on("data", (chunk) => {
       body += chunk;
